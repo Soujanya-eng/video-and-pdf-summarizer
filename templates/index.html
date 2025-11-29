@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Summarizer (Text, Video, Audio)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        h1 { color: #333; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        #upload-form { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; }
+        input[type="file"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 12px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
+        button:hover { background-color: #0056b3; }
+        #result-box { white-space: pre-wrap; font-family: Arial, sans-serif; background-color: #e9ecef; padding: 20px; border-radius: 4px; min-height: 100px; }
+        .status-message { margin-top: 15px; padding: 10px; border-radius: 4px; font-weight: bold; }
+        .loading { background-color: #ffc107; color: #333; }
+        .success { background-color: #28a745; color: white; }
+        .error { background-color: #dc3545; color: white; }
+        #download-btn { background-color: #28a745; margin-top: 10px; display: none; }
+        #download-btn:hover { background-color: #1e7e34; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎬🎧📄 Multimodal Summarizer</h1>
+
+    <form id="upload-form">
+        <label for="file-input">Upload Document, Video, or Audio (25% Summary Target):</label>
+        <input type="file" id="file-input" name="file" accept=".pdf,.txt,.mp4,.avi,.mov,.mp3,.wav" required>
+        <button type="submit" id="submit-btn">Generate Summary</button>
+    </form>
+
+    <div id="status-display" class="status-message" style="display: none;"></div>
+
+    <h2>Summary Result:</h2>
+    <button type="button" id="download-btn">Download Summary</button>
+    <div id="result-box">
+        Upload a file and click 'Generate Summary'. Note: Video/Audio processing is extremely slow on CPU.
+    </div>
+</div>
+
+<script>
+    const resultBox = document.getElementById('result-box');
+    const statusDisplay = document.getElementById('status-display');
+    const submitBtn = document.getElementById('submit-btn');
+    const downloadBtn = document.getElementById('download-btn');
+    const fileInput = document.getElementById('file-input');
+    
+    let currentSummaryText = "";
+    let currentFileName = "";
+
+    function renderSummaryOutput(rawText) {
+        // Displays text with bullet points and newlines using CSS pre-wrap
+        resultBox.textContent = rawText;
+    }
+
+    document.getElementById('upload-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        if (fileInput.files.length === 0) {
+            alert("Please select a file.");
+            return;
+        }
+
+        // 1. Set Loading State
+        const file = fileInput.files[0];
+        const fileExt = file.name.split('.').pop().toLowerCase();
+        
+        statusDisplay.style.display = 'block';
+        statusDisplay.className = 'status-message loading';
+        submitBtn.disabled = true;
+        downloadBtn.style.display = 'none';
+
+        if (['mp4', 'avi', 'mov', 'mp3', 'wav'].includes(fileExt)) {
+             statusDisplay.textContent = 'Processing... **WARNING: Transcription for video/audio is VERY slow and may take minutes.**';
+        } else {
+             statusDisplay.textContent = 'Processing... (Text analysis is fast).';
+        }
+        resultBox.textContent = 'Processing...';
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // 2. Call Summarization Endpoint
+            const response = await fetch('/summarize', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            
+            // 3. Handle Response
+            if (data.status === 'success') {
+                statusDisplay.className = 'status-message success';
+                statusDisplay.textContent = 'Summarization Complete!';
+                
+                currentSummaryText = data.summary;
+                currentFileName = data.original_filename;
+                
+                renderSummaryOutput(currentSummaryText); 
+                
+                // SHOW DOWNLOAD BUTTON (FIXED)
+                downloadBtn.style.display = 'block'; 
+            } else {
+                statusDisplay.className = 'status-message error';
+                // Show the error message returned from the server (critical)
+                statusDisplay.textContent = 'ERROR: ' + data.summary; 
+                resultBox.textContent = 'Failed to generate summary.';
+            }
+
+        } catch (error) {
+            statusDisplay.className = 'status-message error';
+            statusDisplay.textContent = 'Network Error: The request timed out (connection lost).';
+            resultBox.textContent = 'Failed to generate summary.';
+            console.error('Fetch error:', error);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+
+    // --- Download Functionality (FIXED) ---
+    downloadBtn.addEventListener('click', async function() {
+        if (!currentSummaryText || !currentFileName) return;
+
+        // Ensure we get the name without the extension (e.g., 'video' from 'video.mp4')
+        const originalName = currentFileName.split('.').slice(0, -1).join('.');
+        const downloadFilename = `${originalName}_summarizer.txt`;
+        
+        // Use Blob to force a download from memory
+        const blob = new Blob([currentSummaryText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = downloadFilename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+</script>
+
+</body>
+</html>
