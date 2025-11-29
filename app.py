@@ -206,3 +206,6 @@ if __name__ == '__main__':
     app.run(debug=True, threaded=False)
 # pip install nltk
 # pip install sumy nltk
+# git add .
+# git commit -m "if"
+# git push -u origin main
